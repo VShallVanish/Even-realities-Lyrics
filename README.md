@@ -2,6 +2,34 @@
 
 ### Real-time synced lyrics on your Even Realities G2 smart glasses
 
+## Even hub testing QR code
+
+Your GitHub Pages URL for this repo is:
+`https://marioduartelanseros-eng.github.io/Even-realities-Lyrics/`
+
+Open directly in Even Hub:
+https://marioduartelanseros-eng.github.io/Even-realities-Lyrics/
+
+<p align="left">
+  <a href="https://marioduartelanseros-eng.github.io/Even-realities-Lyrics/">
+    <img
+      src="https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=https%3A%2F%2Fmarioduartelanseros-eng.github.io%2FEven-realities-Lyrics%2F"
+      alt="Even hub testing QR code"
+    />
+  </a>
+</p>
+
+If you want to test from local dev without deploying first, create a tunnel URL and run:
+
+```bash
+npx evenhub-simulator https://YOUR_TUNNEL_URL
+```
+
+Then use that same tunnel URL inside the QR image link above.
+
+------------------------------------------------------------------------
+
+
 <p align="center">
 
 <a href="https://www.evenrealities.com/">
@@ -171,34 +199,7 @@ npx evenhub-simulator http://127.0.0.1:5173
 Click login, authorize, and play a song.
 
 ------------------------------------------------------------------------
-
-## Even hub testing QR code
-
-GitHub Pages URL for this repo is:
-`https://marioduartelanseros-eng.github.io/Even-realities-Lyrics/`
-
-Open directly in Even Hub:
-https://marioduartelanseros-eng.github.io/Even-realities-Lyrics/
-
-<p align="left">
-  <a href="https://marioduartelanseros-eng.github.io/Even-realities-Lyrics/">
-    <img
-      src="https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=https%3A%2F%2Fmarioduartelanseros-eng.github.io%2FEven-realities-Lyrics%2F"
-      alt="Even hub testing QR code"
-    />
-  </a>
-</p>
-
-If you want to test from local dev without deploying first, create a tunnel URL and run:
-
-```bash
-npx evenhub-simulator https://YOUR_TUNNEL_URL
-```
-
-Then use that same tunnel URL inside the QR image link above.
-
-------------------------------------------------------------------------
-## 💍 Ring Controller
+`r`n## 💍 Ring Controller
 
   Action    Function
   --------- ----------------
