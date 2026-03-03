@@ -11,9 +11,13 @@ let displayMode: 'list' | 'image' | null = null;
 const CONTAINER_ID = 100;
 const CONTAINER_NAME = 'lyrics';
 
-// Display dimensions
-const DISPLAY_W = 576;
-const DISPLAY_H = 200;
+// G2 image container constraints are 20-200 (w) and 20-100 (h)
+const DISPLAY_W = 200;
+const DISPLAY_H = 100;
+const DISPLAY_X = Math.floor((576 - DISPLAY_W) / 2);
+const DISPLAY_Y = Math.floor((288 - DISPLAY_H) / 2);
+
+const MIN_IMAGE_SEND_INTERVAL_MS = 700;
 
 // Offscreen canvas
 let canvas: HTMLCanvasElement | null = null;
@@ -25,6 +29,13 @@ let cachedArtImg: HTMLImageElement | null = null;
 
 // Ring controller callback
 let onRingAction: ((action: 'click' | 'next' | 'prev') => void) | null = null;
+
+// Image transmission control (G2 does not allow concurrent image updates)
+let isImageSendInFlight = false;
+let hasPendingImageSend = false;
+let imageSendTimer: ReturnType<typeof setTimeout> | null = null;
+let lastImageSendAt = 0;
+let lastImageStateKey = '';
 
 export function setRingActionHandler(handler: (action: 'click' | 'next' | 'prev') => void): void {
   onRingAction = handler;
@@ -294,7 +305,7 @@ async function sendFrameToGlasses(): Promise<void> {
   const base64 = btoa(binary);
 
   try {
-    const result = await bridge.callEvenApp('updateImageRawData', {
+    await bridge.callEvenApp('updateImageRawData', {
       containerID: CONTAINER_ID,
       containerName: CONTAINER_NAME,
       imageData: base64,
@@ -302,6 +313,38 @@ async function sendFrameToGlasses(): Promise<void> {
     // Don't log every frame to avoid spam
   } catch (err) {
     console.error('Failed to send image to glasses:', err);
+  }
+}
+
+async function flushImageSendQueue(): Promise<void> {
+  if (isImageSendInFlight) {
+    hasPendingImageSend = true;
+    return;
+  }
+
+  const now = Date.now();
+  const waitMs = Math.max(0, MIN_IMAGE_SEND_INTERVAL_MS - (now - lastImageSendAt));
+  if (waitMs > 0) {
+    hasPendingImageSend = true;
+    if (!imageSendTimer) {
+      imageSendTimer = setTimeout(() => {
+        imageSendTimer = null;
+        void flushImageSendQueue();
+      }, waitMs);
+    }
+    return;
+  }
+
+  isImageSendInFlight = true;
+  hasPendingImageSend = false;
+  try {
+    await sendFrameToGlasses();
+    lastImageSendAt = Date.now();
+  } finally {
+    isImageSendInFlight = false;
+    if (hasPendingImageSend) {
+      void flushImageSendQueue();
+    }
   }
 }
 
@@ -334,8 +377,8 @@ export async function initGlasses(): Promise<boolean> {
       imageObject: [{
         containerID: CONTAINER_ID,
         containerName: CONTAINER_NAME,
-        xPosition: 0,
-        yPosition: 0,
+        xPosition: DISPLAY_X,
+        yPosition: DISPLAY_Y,
         width: DISPLAY_W,
         height: DISPLAY_H,
       }],
@@ -351,15 +394,15 @@ export async function initGlasses(): Promise<boolean> {
       c.fillStyle = '#000000';
       c.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
       c.fillStyle = '#FFFFFF';
-      c.font = 'bold 24px Arial, sans-serif';
+      c.font = 'bold 16px Arial, sans-serif';
       c.textBaseline = 'middle';
       c.textAlign = 'center';
-      c.fillText('LyricLens', DISPLAY_W / 2, DISPLAY_H / 2 - 14);
+      c.fillText('LyricLens', DISPLAY_W / 2, DISPLAY_H / 2 - 10);
       c.fillStyle = '#888888';
-      c.font = '14px Arial, sans-serif';
-      c.fillText('Waiting for music...', DISPLAY_W / 2, DISPLAY_H / 2 + 14);
+      c.font = '11px Arial, sans-serif';
+      c.fillText('Waiting for music...', DISPLAY_W / 2, DISPLAY_H / 2 + 10);
       c.textAlign = 'left';
-      await sendFrameToGlasses();
+      await flushImageSendQueue();
 
       updateGlassesStatusUI(true);
       return true;
@@ -373,13 +416,13 @@ export async function initGlasses(): Promise<boolean> {
         {
           containerID: CONTAINER_ID,
           containerName: 'title',
-          xPosition: 15,
+          xPosition: 8,
           yPosition: 5,
-          width: 610,
+          width: 560,
           height: 95,
           itemContainer: {
             itemCount: 2,
-            itemWidth: 590,
+            itemWidth: 544,
             isItemSelectBorderEn: 1,
             itemName: ['LyricLens', ''],
           },
@@ -388,13 +431,13 @@ export async function initGlasses(): Promise<boolean> {
         {
           containerID: CONTAINER_ID + 1,
           containerName: 'prev',
-          xPosition: 15,
+          xPosition: 8,
           yPosition: 105,
-          width: 610,
+          width: 560,
           height: 40,
           itemContainer: {
             itemCount: 1,
-            itemWidth: 590,
+            itemWidth: 544,
             isItemSelectBorderEn: 0,
             itemName: [''],
           },
@@ -403,13 +446,13 @@ export async function initGlasses(): Promise<boolean> {
         {
           containerID: CONTAINER_ID + 2,
           containerName: 'current',
-          xPosition: 15,
+          xPosition: 8,
           yPosition: 150,
-          width: 610,
+          width: 560,
           height: 40,
           itemContainer: {
             itemCount: 1,
-            itemWidth: 590,
+            itemWidth: 544,
             isItemSelectBorderEn: 1,
             itemName: ['Waiting for music...'],
           },
@@ -418,13 +461,13 @@ export async function initGlasses(): Promise<boolean> {
         {
           containerID: CONTAINER_ID + 3,
           containerName: 'next',
-          xPosition: 15,
+          xPosition: 8,
           yPosition: 195,
-          width: 610,
+          width: 560,
           height: 40,
           itemContainer: {
             itemCount: 1,
-            itemWidth: 590,
+            itemWidth: 544,
             isItemSelectBorderEn: 0,
             itemName: [''],
           },
@@ -466,6 +509,24 @@ export async function displayLyricOnGlasses(
   if (!bridge || !isConnected || !displayMode) return;
 
   if (displayMode === 'image') {
+    const imageStateKey = [
+      trackName || '',
+      artistName || '',
+      prevLine || '',
+      currentLine || '',
+      nextLine || '',
+      albumArtUrl || '',
+      typeof progressPct === 'number' ? Math.round(progressPct) : 0,
+      typeof elapsedMs === 'number' ? Math.floor(elapsedMs / 1000) : 0,
+      typeof totalMs === 'number' ? Math.floor(totalMs / 1000) : 0,
+    ].join('|');
+
+    if (imageStateKey === lastImageStateKey) {
+      return;
+    }
+
+    lastImageStateKey = imageStateKey;
+
     // Load album art (cached after first load)
     const art = albumArtUrl ? await loadAlbumArt(albumArtUrl) : null;
     renderFrame(
@@ -479,7 +540,7 @@ export async function displayLyricOnGlasses(
       elapsedMs || 0,
       totalMs || 0,
     );
-    await sendFrameToGlasses();
+    await flushImageSendQueue();
     return;
   }
 
@@ -514,13 +575,13 @@ export async function displayLyricOnGlasses(
           {
             containerID: CONTAINER_ID,
             containerName: 'title',
-            xPosition: 15,
+            xPosition: 8,
             yPosition: 5,
-            width: 610,
+            width: 560,
             height: 95,
             itemContainer: {
               itemCount: titleItems.length,
-              itemWidth: 590,
+              itemWidth: 544,
               isItemSelectBorderEn: 1,
               itemName: titleItems,
             },
@@ -529,13 +590,13 @@ export async function displayLyricOnGlasses(
           {
             containerID: CONTAINER_ID + 1,
             containerName: 'prev',
-            xPosition: 15,
+            xPosition: 8,
             yPosition: 105,
-            width: 610,
+            width: 560,
             height: 70,
             itemContainer: {
               itemCount: prevItems.length,
-              itemWidth: 590,
+              itemWidth: 544,
               isItemSelectBorderEn: 0,
               itemName: prevItems,
             },
@@ -544,13 +605,13 @@ export async function displayLyricOnGlasses(
           {
             containerID: CONTAINER_ID + 2,
             containerName: 'current',
-            xPosition: 15,
+            xPosition: 8,
             yPosition: 150,
-            width: 610,
+            width: 560,
             height: 70,
             itemContainer: {
               itemCount: currentItems.length,
-              itemWidth: 590,
+              itemWidth: 544,
               isItemSelectBorderEn: 1,
               itemName: currentItems,
             },
@@ -559,13 +620,13 @@ export async function displayLyricOnGlasses(
           {
             containerID: CONTAINER_ID + 3,
             containerName: 'next',
-            xPosition: 15,
+            xPosition: 8,
             yPosition: 195,
-            width: 610,
+            width: 560,
             height: 70,
             itemContainer: {
               itemCount: nextItems.length,
-              itemWidth: 590,
+              itemWidth: 544,
               isItemSelectBorderEn: 0,
               itemName: nextItems,
             },
