@@ -165,7 +165,15 @@ function renderFrame(
 
   c.textBaseline = 'top';
   let lyricsCursorY = 44;
-  if (prevLine) {
+
+  // Current lyric (priority): allow up to 3 lines for long lyrics
+  c.fillStyle = '#FFFFFF';
+  c.font = 'bold 12px Arial, sans-serif';
+  const currentLines = wrapText(c, currentLine, lyricsMaxW, 3);
+
+  // Only show context lines when current lyric is short enough
+  const canShowContext = currentLines.length <= 1;
+  if (canShowContext && prevLine) {
     c.fillStyle = '#555555';
     c.font = '8px Arial, sans-serif';
     const prevLines = wrapText(c, prevLine, lyricsMaxW, 1);
@@ -176,24 +184,19 @@ function renderFrame(
     lyricsCursorY += 1;
   }
 
-  // Current lyric (larger and brighter)
   c.fillStyle = '#FFFFFF';
   c.font = 'bold 12px Arial, sans-serif';
-  const currentLines = wrapText(c, currentLine, lyricsMaxW, 2);
   for (const line of currentLines) {
     c.fillText(line, lyricsX, lyricsCursorY);
     lyricsCursorY += 13;
   }
-  lyricsCursorY += 1;
 
-  // Next lyric
-  if (nextLine) {
+  if (canShowContext && nextLine && lyricsCursorY <= DISPLAY_H - 10) {
     c.fillStyle = '#555555';
     c.font = '8px Arial, sans-serif';
     const nextLines = wrapText(c, nextLine, lyricsMaxW, 1);
     for (const line of nextLines) {
-      c.fillText(line, lyricsX, lyricsCursorY);
-      lyricsCursorY += 10;
+      c.fillText(line, lyricsX, lyricsCursorY + 1);
     }
   }
 }
@@ -539,6 +542,9 @@ export async function displayLyricOnGlasses(
   if (!bridge || !isConnected || !displayMode) return;
 
   if (displayMode === 'image') {
+    // Load album art (cached after first load)
+    const art = albumArtUrl ? await loadAlbumArt(albumArtUrl) : null;
+
     const imageStateKey = [
       trackName || '',
       artistName || '',
@@ -546,6 +552,7 @@ export async function displayLyricOnGlasses(
       currentLine || '',
       nextLine || '',
       albumArtUrl || '',
+      art ? 'art:1' : 'art:0',
       typeof progressPct === 'number' ? Math.round(progressPct) : 0,
       typeof elapsedMs === 'number' ? Math.floor(elapsedMs / 1000) : 0,
       typeof totalMs === 'number' ? Math.floor(totalMs / 1000) : 0,
@@ -557,8 +564,6 @@ export async function displayLyricOnGlasses(
 
     lastImageStateKey = imageStateKey;
 
-    // Load album art (cached after first load)
-    const art = albumArtUrl ? await loadAlbumArt(albumArtUrl) : null;
     renderFrame(
       trackName || '',
       artistName || '',
