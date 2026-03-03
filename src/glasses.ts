@@ -39,6 +39,10 @@ let imageSendTimer: ReturnType<typeof setTimeout> | null = null;
 let lastImageSendAt = 0;
 let lastImageStateKey = '';
 
+function isSuccessResult(result: unknown): boolean {
+  return result === 0 || result === true || result === 'success';
+}
+
 export function setRingActionHandler(handler: (action: 'click' | 'next' | 'prev') => void): void {
   onRingAction = handler;
 }
@@ -88,14 +92,14 @@ function renderFrame(
 ): void {
   const c = ensureCanvas();
 
-  // Clear — black background
+  // Clear
   c.fillStyle = '#000000';
   c.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
 
-  // --- Album Art (greyscale, left side) ---
-  const artSize = 72;
-  const artX = 8;
-  const artY = 6;
+  // Compact header for 200x100 image container
+  const artSize = 24;
+  const artX = 4;
+  const artY = 4;
   const hasArt = albumArt !== null;
 
   if (albumArt) {
@@ -112,89 +116,84 @@ function renderFrame(
     c.putImageData(artData, artX, artY);
   }
 
-  const textX = hasArt ? artX + artSize + 12 : 12;
-  const rightEdge = DISPLAY_W - 12;
+  const textX = hasArt ? artX + artSize + 6 : 6;
+  const rightEdge = DISPLAY_W - 6;
   const maxTextW = rightEdge - textX;
 
-  // --- Track Name (bright, bold) ---
+  // Track + artist
   c.fillStyle = '#FFFFFF';
-  c.font = 'bold 18px Arial, sans-serif';
+  c.font = 'bold 10px Arial, sans-serif';
   c.textBaseline = 'top';
-  c.fillText(fitText(c, trackName, maxTextW), textX, 10);
+  c.fillText(fitText(c, trackName, maxTextW), textX, 4);
 
-  // --- Artist Name (medium brightness) ---
   c.fillStyle = '#AAAAAA';
-  c.font = '14px Arial, sans-serif';
-  c.fillText(fitText(c, artistName, maxTextW), textX, 32);
+  c.font = '9px Arial, sans-serif';
+  c.fillText(fitText(c, artistName, maxTextW), textX, 16);
 
-  // --- Progress Bar ---
-  const barY = 56;
-  const barH = 3;
+  // Progress bar + time
+  const barY = 29;
+  const barH = 2;
   const barW = maxTextW;
 
-  // Background bar (dim)
   c.fillStyle = '#333333';
   c.fillRect(textX, barY, barW, barH);
-  // Filled bar (bright)
   c.fillStyle = '#CCCCCC';
   const filledW = Math.round((progressPct / 100) * barW);
   c.fillRect(textX, barY, filledW, barH);
 
-  // --- Time stamps ---
   c.fillStyle = '#888888';
-  c.font = '11px Arial, sans-serif';
+  c.font = '8px Arial, sans-serif';
   const elapsedStr = formatTime(elapsedMs);
   const totalStr = formatTime(totalMs);
-  c.fillText(elapsedStr, textX, barY + 6);
+  c.fillText(elapsedStr, textX, barY + 4);
   c.textAlign = 'right';
-  c.fillText(totalStr, rightEdge, barY + 6);
+  c.fillText(totalStr, rightEdge, barY + 4);
   c.textAlign = 'left';
 
-  // --- Separator Line ---
-  const sepY = 82;
+  // Divider
+  const sepY = 40;
   c.strokeStyle = '#444444';
   c.lineWidth = 1;
   c.beginPath();
-  c.moveTo(8, sepY);
-  c.lineTo(DISPLAY_W - 8, sepY);
+  c.moveTo(4, sepY);
+  c.lineTo(DISPLAY_W - 4, sepY);
   c.stroke();
 
-  // --- Lyrics Area ---
-  const lyricsX = 14;
-  const lyricsMaxW = DISPLAY_W - 28;
+  // Lyrics area
+  const lyricsX = 6;
+  const lyricsMaxW = DISPLAY_W - 12;
 
-  // Previous line (dim, allow up to 2 wrapped lines)
   c.textBaseline = 'top';
-  let lyricsCursorY = 90;
+  let lyricsCursorY = 44;
   if (prevLine) {
     c.fillStyle = '#555555';
-    c.font = '15px Arial, sans-serif';
-    const prevLines = wrapText(c, prevLine, lyricsMaxW, 2);
+    c.font = '8px Arial, sans-serif';
+    const prevLines = wrapText(c, prevLine, lyricsMaxW, 1);
     for (const line of prevLines) {
       c.fillText(line, lyricsX, lyricsCursorY);
-      lyricsCursorY += 18;
+      lyricsCursorY += 10;
     }
-    lyricsCursorY += 4;
+    lyricsCursorY += 1;
   }
 
-  // Current line (BRIGHT, larger, allow up to 2 wrapped lines)
+  // Current lyric (larger and brighter)
   c.fillStyle = '#FFFFFF';
-  c.font = 'bold 22px Arial, sans-serif';
+  c.font = 'bold 12px Arial, sans-serif';
   const currentLines = wrapText(c, currentLine, lyricsMaxW, 2);
   for (const line of currentLines) {
     c.fillText(line, lyricsX, lyricsCursorY);
-    lyricsCursorY += 25;
+    lyricsCursorY += 13;
   }
-  lyricsCursorY += 4;
+  lyricsCursorY += 1;
 
-  // Next line (dim, allow up to 1 wrapped line)
+  // Next lyric
   if (nextLine) {
     c.fillStyle = '#555555';
-    c.font = '15px Arial, sans-serif';
+    c.font = '8px Arial, sans-serif';
     const nextLines = wrapText(c, nextLine, lyricsMaxW, 1);
     for (const line of nextLines) {
       c.fillText(line, lyricsX, lyricsCursorY);
-      lyricsCursorY += 18;
+      lyricsCursorY += 10;
     }
   }
 }
@@ -362,8 +361,23 @@ export async function initGlasses(): Promise<boolean> {
 
     bridge.onEvenHubEvent((event: any) => {
       console.log('EvenHub event:', event);
+
+      if (event.textEvent && onRingAction) {
+        const eventType = event.textEvent.eventType;
+        if (eventType === undefined || eventType === 0) onRingAction('click');
+        else if (eventType === 1) onRingAction('prev');
+        else if (eventType === 2) onRingAction('next');
+      }
+
+      if (event.sysEvent && onRingAction) {
+        const eventType = event.sysEvent.eventType;
+        if (eventType === undefined || eventType === 0) onRingAction('click');
+        else if (eventType === 1) onRingAction('prev');
+        else if (eventType === 2) onRingAction('next');
+      }
+
       if (event.listEvent && onRingAction) {
-        const idx = event.listEvent.index ?? event.listEvent.itemIndex ?? 0;
+        const idx = event.listEvent.currentSelectItemIndex ?? event.listEvent.index ?? event.listEvent.itemIndex ?? 0;
         console.log('Ring/list event index:', idx);
         if (idx === 1) onRingAction('next');
         else if (idx === 2) onRingAction('prev');
@@ -374,56 +388,8 @@ export async function initGlasses(): Promise<boolean> {
     ensureCanvas();
     lastImageStateKey = '';
 
-    // Try image container
-    const imgResult = await bridge.callEvenApp('createStartUpPageContainer', {
-      containerTotalNum: 2,
-      textObject: [{
-        containerID: EVENT_CONTAINER_ID,
-        containerName: EVENT_CONTAINER_NAME,
-        xPosition: 0,
-        yPosition: 0,
-        width: 576,
-        height: 288,
-        isEventCapture: 1,
-        content: ' ',
-      }],
-      imageObject: [{
-        containerID: CONTAINER_ID,
-        containerName: CONTAINER_NAME,
-        xPosition: DISPLAY_X,
-        yPosition: DISPLAY_Y,
-        width: DISPLAY_W,
-        height: DISPLAY_H,
-      }],
-    });
-    console.log('IMAGE container result:', imgResult);
-
-    if (imgResult === 0) {
-      displayMode = 'image';
-      console.log('Using IMAGE mode with PNG encoder');
-
-      // Send initial frame
-      const c = ensureCanvas();
-      c.fillStyle = '#000000';
-      c.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
-      c.fillStyle = '#FFFFFF';
-      c.font = 'bold 16px Arial, sans-serif';
-      c.textBaseline = 'middle';
-      c.textAlign = 'center';
-      c.fillText('LyricLens', DISPLAY_W / 2, DISPLAY_H / 2 - 10);
-      c.fillStyle = '#888888';
-      c.font = '11px Arial, sans-serif';
-      c.fillText('Waiting for music...', DISPLAY_W / 2, DISPLAY_H / 2 + 10);
-      c.textAlign = 'left';
-      await flushImageSendQueue();
-
-      updateGlassesStatusUI(true);
-      return true;
-    }
-
-    // Fallback: list mode (4 containers)
-    await bridge.callEvenApp('shutDownPageContainer', { exitMode: 0 });
-    const listResult = await bridge.callEvenApp('createStartUpPageContainer', {
+    // Create a reliable startup page first (createStartUpPageContainer must be called once at startup)
+    const listStartResult = await bridge.callEvenApp('createStartUpPageContainer', {
       containerTotalNum: 4,
       listObject: [
         {
@@ -466,7 +432,7 @@ export async function initGlasses(): Promise<boolean> {
           itemContainer: {
             itemCount: 1,
             itemWidth: 544,
-            isItemSelectBorderEn: 1,
+            isItemSelectBorderEn: 0,
             itemName: ['Waiting for music...'],
           },
           isEventCapture: 1,
@@ -488,18 +454,69 @@ export async function initGlasses(): Promise<boolean> {
         },
       ],
     });
-    console.log('LIST 4-container result:', listResult);
+    console.log('LIST startup result:', listStartResult);
 
-    if (listResult === 0) {
-      displayMode = 'list';
-      console.log('Using LIST mode (4 containers fallback)');
-      updateGlassesStatusUI(true);
-      return true;
+    if (!isSuccessResult(listStartResult)) {
+      console.error('Startup page creation failed');
+      updateGlassesStatusUI(false);
+      return false;
     }
 
-    console.error('All container types failed');
-    updateGlassesStatusUI(false);
-    return false;
+    displayMode = 'list';
+    updateGlassesStatusUI(true);
+
+    // Upgrade to image mode via rebuild. If this fails, app stays in list mode instead of blank.
+    const imageRebuildResult = await bridge.callEvenApp('rebuildPageContainer', {
+      containerTotalNum: 2,
+      textObject: [{
+        containerID: EVENT_CONTAINER_ID,
+        containerName: EVENT_CONTAINER_NAME,
+        xPosition: 0,
+        yPosition: 0,
+        width: 576,
+        height: 288,
+        borderWidth: 0,
+        borderColor: 0,
+        borderRdaius: 0,
+        paddingLength: 0,
+        isEventCapture: 1,
+        content: ' ',
+      }],
+      imageObject: [{
+        containerID: CONTAINER_ID,
+        containerName: CONTAINER_NAME,
+        xPosition: DISPLAY_X,
+        yPosition: DISPLAY_Y,
+        width: DISPLAY_W,
+        height: DISPLAY_H,
+      }],
+    });
+    console.log('IMAGE rebuild result:', imageRebuildResult);
+
+    if (isSuccessResult(imageRebuildResult)) {
+      displayMode = 'image';
+      console.log('Using IMAGE mode with PNG encoder');
+
+      const c = ensureCanvas();
+      c.fillStyle = '#000000';
+      c.fillRect(0, 0, DISPLAY_W, DISPLAY_H);
+      c.fillStyle = '#FFFFFF';
+      c.font = 'bold 16px Arial, sans-serif';
+      c.textBaseline = 'middle';
+      c.textAlign = 'center';
+      c.fillText('LyricLens', DISPLAY_W / 2, DISPLAY_H / 2 - 10);
+      c.fillStyle = '#888888';
+      c.font = '11px Arial, sans-serif';
+      c.fillText('Waiting for music...', DISPLAY_W / 2, DISPLAY_H / 2 + 10);
+      c.textAlign = 'left';
+      await flushImageSendQueue();
+    } else {
+      displayMode = 'list';
+      console.warn('Image rebuild failed, staying in LIST mode');
+    }
+
+    updateGlassesStatusUI(true);
+    return true;
   } catch (err) {
     console.warn('Even Hub SDK not available:', err);
     isConnected = false;
@@ -595,7 +612,7 @@ export async function displayLyricOnGlasses(
             itemContainer: {
               itemCount: titleItems.length,
               itemWidth: 544,
-              isItemSelectBorderEn: 1,
+              isItemSelectBorderEn: 0,
               itemName: titleItems,
             },
             isEventCapture: 0,
@@ -625,7 +642,7 @@ export async function displayLyricOnGlasses(
             itemContainer: {
               itemCount: currentItems.length,
               itemWidth: 544,
-              isItemSelectBorderEn: 1,
+              isItemSelectBorderEn: 0,
               itemName: currentItems,
             },
             isEventCapture: 1,
