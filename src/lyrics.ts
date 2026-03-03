@@ -23,9 +23,7 @@ export async function fetchLyrics(
   });
 
   try {
-    let response = await fetch(exactUrl, {
-      headers: { 'User-Agent': 'LyricLens v1.0.0' },
-    });
+    let response = await fetch(exactUrl);
 
     // If exact match fails, try search
     if (!response.ok) {
@@ -33,9 +31,7 @@ export async function fetchLyrics(
         track_name: trackName,
         artist_name: artistName,
       });
-      response = await fetch(searchUrl, {
-        headers: { 'User-Agent': 'LyricLens v1.0.0' },
-      });
+      response = await fetch(searchUrl);
 
       if (!response.ok) {
         return { synced: null, plain: null };

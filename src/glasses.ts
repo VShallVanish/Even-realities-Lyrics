@@ -10,6 +10,8 @@ let displayMode: 'list' | 'image' | null = null;
 
 const CONTAINER_ID = 100;
 const CONTAINER_NAME = 'lyrics';
+const EVENT_CONTAINER_ID = 99;
+const EVENT_CONTAINER_NAME = 'events';
 
 // G2 image container constraints are 20-200 (w) and 20-100 (h)
 const DISPLAY_W = 200;
@@ -370,10 +372,21 @@ export async function initGlasses(): Promise<boolean> {
     });
 
     ensureCanvas();
+    lastImageStateKey = '';
 
     // Try image container
     const imgResult = await bridge.callEvenApp('createStartUpPageContainer', {
-      containerTotalNum: 1,
+      containerTotalNum: 2,
+      textObject: [{
+        containerID: EVENT_CONTAINER_ID,
+        containerName: EVENT_CONTAINER_NAME,
+        xPosition: 0,
+        yPosition: 0,
+        width: 576,
+        height: 288,
+        isEventCapture: 1,
+        content: ' ',
+      }],
       imageObject: [{
         containerID: CONTAINER_ID,
         containerName: CONTAINER_NAME,
