@@ -5,10 +5,10 @@
 ## Even hub testing QR code
 
 GitHub Pages URL for this repo is:
-`https://marioduartelanseros-eng.github.io/Even-realities-Lyrics/`
+`https://vshallvanish.github.io/Even-realities-Lyrics/`
 
 Open directly in Even Hub:
-https://marioduartelanseros-eng.github.io/Even-realities-Lyrics/
+https://vshallvanish.github.io/Even-realities-Lyrics/
 
 <p align="left">
   <a href="https://vshallvanish.github.io/Even-realities-Lyrics/">
